@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning Project"
+author: "Sriram Venkatachalam"
+date: "Sunday, June 21, 2015"
+output: html_document
+---
+
+The goal of this project is to predict the manner in which the subjects did the exercise. The manner in which the subjects did the exercise is given by the "classe" variable in the training set. Any of the other variables given in the training data set can be used for this prediction analysis. The prediction model should predict 20 different test cases. 
+
+The following code chunk loads the requiredlibraries. The training and the testing data are loaded to two different data frames. The tr_dt and the te_dt contains the given training and testing data respectively.
+
+```{r}
+library(caret);library(ggplot2);library(rattle);library(rpart);library(randomForest)
+training_data<-read.csv("D:/Academics/Data science lecture videos/Practical machine leanring/Project/pml-training.csv",header = TRUE)
+testing_data<-read.csv("D:/Academics/Data science lecture videos/Practical machine leanring/Project/pml-testing.csv",header = TRUE)
+tr_dt<-training_data
+te_dt<-testing_data
+```
+
+The following chunk removes the first and fifth columns from both the training and testing data sets. Reason: These two variables are unnecesary for our prediction model. The first column is the index variables. And, at least one class/level of the fifth variable in the training data set is missing in the fifth column of the testing data set.  
+```{r}
+###Cleaning data
+
+#Remove the first column and the fifth columns
+tr_dt<-tr_dt[,-c(1,5)]
+te_dt<-te_dt[,-c(1,5)]
+
+```
+
+Removing all the near zero variance possessing variables helps to tremondously simplify our model. These variables do not add lot of meaning to our model which is yet to be built. This achieved by using the nearZerovar function. 
+```{r}
+#remove variables with near zero variance
+
+nzv_data<-nearZeroVar(tr_dt,saveMetrics = T)
+nzv_list<-grep("TRUE",nzv_data$nzv,ignore.case = TRUE)
+tr_dt<-tr_dt[,-c(nzv_list)]
+te_dt<-te_dt[,-c(nzv_list)]
+```
+
+This step removes all those variables of the training data set that have more than 60% of its values as NA. Now, the tr_dt_new is the new training data set.
+```{r}
+tr_dt_new <- tr_dt
+for(i in 1:length(tr_dt)) { 
+  if( sum( is.na( tr_dt[, i] ) ) /nrow(tr_dt) >= .6 ) { 
+    for(j in 1:length(tr_dt_new)) {
+      if( length( grep(names(tr_dt[i]), names(tr_dt_new)[j]) ) ==1)  { 
+        tr_dt_new <- tr_dt_new[ , -j] 
+      }   
+    } 
+  }
+}
+```
+
+The above step is repeated for building a new testing data set. Here, the te_dt_new represents the new testing data set
+```{r}
+te_dt_new <- te_dt
+for(i in 1:length(te_dt)) {
+  if( sum( is.na( te_dt[, i] ) ) /nrow(te_dt) >= .6 ) {
+    for(j in 1:length(te_dt_new)) {
+      if( length( grep(names(te_dt[i]), names(te_dt_new)[j]) ) ==1)  {
+        te_dt_new <- te_dt_new[ , -j]
+      }   
+    } 
+  }
+}
+```
+
+This following code chunk partitions the data set 'tr_dt_new' into two data sets. The 'my_tr' is the dataframe that is going to be used build our prediction model. The 'my_te' is the test frame on which our model is going to be applied and evaluated for its accuracy. For reproducibility, the seed as been set to 123.
+```{r}
+###Split the dataframe 'data' into training and testing datasets
+
+set.seed(123)
+intrain<-createDataPartition(y=tr_dt_new$classe,p=0.60,list=F)
+my_tr<-tr_dt_new[intrain,]
+my_te<-tr_dt_new[-intrain,]
+```
+
+Randomforest method has implemented to build the model. The variable 'mo' stores the model that  is build using the 'randomForest' library. It can be seen that the  OOB estimate of  error rate equals to 0.2%. This value is very small and hence it can be rightfully told that this model is one of best possible models. Moreover, the it can be observed that this model's accuracy is 99.85% when applied on the 'my_te' dataframe. Hence, this model is a good choice to do the prediction analysis on the given test data set 'tr_dt_new'.  
+```{r}
+mo<-randomForest(classe ~ .,data = my_tr,na.action=na.omit)
+print(mo)
+pred<-predict(mo,my_te)
+confusionMatrix(pred,my_te$classe)
+```
+
+The following code chunck converts the types of the following 3 variables; magnet_forearm_z, magnet_dumbbell_z and magnet_forearm_y (of the 'te_dt_new' dataframe) to numeric. This done to match their types with that of the corresponding varialbles in the training data set. 
+```{r}
+te_dt_new$magnet_forearm_z<-as.numeric(te_dt_new$magnet_forearm_z)
+te_dt_new$magnet_dumbbell_z <-as.numeric(te_dt_new$magnet_dumbbell_z)
+te_dt_new$magnet_forearm_y <-as.numeric(te_dt_new$magnet_forearm_y)
+
+```
+
+The following code chunk removes the 'problem_id' variable from the testing data set. And, then the model 'mo' is applied on the given testing data set to perform the prediction analysis. The 'final_pred' is the required character that contains all the predicted values of the 'classe' variable. This character vector is then passed to a function to create tweny separate text files, one for each predicted value.
+```{r}
+te_dt_new<-te_dt_new[,-ncol(te_dt_new)]
+pred2<-predict(mo,te_dt_new)
+final_pred<-as.character(pred2)
+```
+
+This code does the job of creating twenty text files, each containing the predicted value.
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(final_pred)
+```
+
+
+
